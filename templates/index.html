@@ -1,0 +1,215 @@
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System OTP Lamporta</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+        .panel {
+            flex: 1;
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #otpList {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+        }
+        .error {
+            color: red;
+            margin-top: 5px;
+        }
+        .success {
+            color: green;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>System OTP Lamporta</h1>
+    
+    <div class="container">
+        <div class="panel">
+            <h2>Rejestracja</h2>
+            <form id="registerForm">
+                <div class="form-group">
+                    <label for="regUsername">Nazwa użytkownika:</label>
+                    <input type="text" id="regUsername" required>
+                </div>
+                <div class="form-group">
+                    <label for="regPassword">Hasło:</label>
+                    <input type="password" id="regPassword" required>
+                </div>
+                <div class="form-group">
+                    <label for="regN">Liczba użyć (N):</label>
+                    <input type="number" id="regN" value="5" min="1" max="10" required>
+                </div>
+                <button type="submit">Zarejestruj</button>
+                <div id="registerMessage"></div>
+                <div id="otpList"></div>
+            </form>
+        </div>
+
+        <div class="panel">
+            <h2>Logowanie</h2>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="loginUsername">Nazwa użytkownika:</label>
+                    <input type="text" id="loginUsername" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginOTP">OTP:</label>
+                    <input type="text" id="loginOTP" required>
+                </div>
+                <button type="submit">Zaloguj</button>
+                <div id="loginMessage"></div>
+            </form>
+
+            <div style="margin-top: 20px;">
+                <h3>Sprawdź status</h3>
+                <div class="form-group">
+                    <label for="statusUsername">Nazwa użytkownika:</label>
+                    <input type="text" id="statusUsername" required>
+                </div>
+                <button onclick="checkStatus()">Sprawdź pozostałe użycia</button>
+                <div id="statusMessage"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const registerForm = document.getElementById('registerForm');
+        const loginForm = document.getElementById('loginForm');
+
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('regUsername').value;
+            const password = document.getElementById('regPassword').value;
+            const n = document.getElementById('regN').value;
+            
+            try {
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password, n: parseInt(n) }),
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('registerMessage').innerHTML = 
+                        `<div class="success">Rejestracja udana! Pozostało użyć: ${data.remaining_uses}</div>`;
+                    
+                    // Wyświetl listę OTP
+                    const otpListHtml = `
+                        <h3>Twoje hasła jednorazowe (OTP):</h3>
+                        <ol>
+                            ${data.otps.map(otp => `<li>${otp}</li>`).join('')}
+                        </ol>
+                        <p><strong>Zapisz te hasła! Będziesz ich potrzebować do logowania.</strong></p>
+                    `;
+                    document.getElementById('otpList').innerHTML = otpListHtml;
+                } else {
+                    document.getElementById('registerMessage').innerHTML = 
+                        `<div class="error">${data.error}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('registerMessage').innerHTML = 
+                    `<div class="error">Błąd podczas rejestracji: ${error}</div>`;
+            }
+        });
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('loginUsername').value;
+            const otp = document.getElementById('loginOTP').value;
+            
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, otp }),
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('loginMessage').innerHTML = 
+                        `<div class="success">${data.message}${data.remaining_uses ? 
+                            ` Pozostało użyć: ${data.remaining_uses}` : ''}</div>`;
+                } else {
+                    document.getElementById('loginMessage').innerHTML = 
+                        `<div class="error">${data.error}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('loginMessage').innerHTML = 
+                    `<div class="error">Błąd podczas logowania: ${error}</div>`;
+            }
+        });
+
+        async function checkStatus() {
+            const username = document.getElementById('statusUsername').value;
+            if (!username) {
+                document.getElementById('statusMessage').innerHTML = 
+                    '<div class="error">Podaj nazwę użytkownika</div>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/status/${username}`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('statusMessage').innerHTML = 
+                        `<div class="success">Pozostało użyć: ${data.remaining_uses}</div>`;
+                } else {
+                    document.getElementById('statusMessage').innerHTML = 
+                        `<div class="error">${data.error}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('statusMessage').innerHTML = 
+                    `<div class="error">Błąd podczas sprawdzania statusu: ${error}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
